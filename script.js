@@ -1,5 +1,5 @@
 // =========================
-// 密码管理器（双页面兼容版）
+// 密码管理器（双页面兼容版 + 2FA 实时计算）
 // 兼容：index.html / security.html
 // =========================
 
@@ -9,6 +9,11 @@ const MODE_KEY = "pm_mode_v1";      // secure | plain
 
 const SALT_LEN = 16;
 const IV_LEN = 12;
+
+// 2FA 配置
+const TOTP_STEP = 30;   // 30秒一刷新
+const TOTP_DIGITS = 6;  // 6位验证码
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 // ---------- DOM（按页面可能不存在，全部做兼容） ----------
 // auth (index)
@@ -40,6 +45,7 @@ const nameInput = document.getElementById("name");
 const accountInput = document.getElementById("account");
 const passwordInput = document.getElementById("password");
 const noteInput = document.getElementById("note");
+const totpSecretInput = document.getElementById("totpSecret"); // 新增
 const searchInput = document.getElementById("searchInput");
 const listContainer = document.getElementById("listContainer");
 const genPasswordBtn = document.getElementById("genPasswordBtn");
@@ -51,17 +57,8 @@ let cryptoKey = null;
 let vaultSaltBase64 = null;
 let mode = localStorage.getItem(MODE_KEY) || "secure"; // 默认开启主密码
 
-function isIndexPage() {
-  return !!authCard || !!appArea || !!form;
-}
-function isSecurityPage() {
-  return !!toggleMasterBtn || !!changeMasterBtn;
-}
-
-function setMode(nextMode) {
-  mode = nextMode;
-  localStorage.setItem(MODE_KEY, nextMode);
-}
+let totpTimer = null;
+let lastTotpStep = -1;
 
 // ---------- 工具 ----------
 function toBase64(bytes) {
@@ -80,6 +77,18 @@ function randomBytes(len) {
   const arr = new Uint8Array(len);
   crypto.getRandomValues(arr);
   return arr;
+}
+
+function isIndexPage() {
+  return !!authCard || !!appArea || !!form;
+}
+function isSecurityPage() {
+  return !!toggleMasterBtn || !!changeMasterBtn;
+}
+
+function setMode(nextMode) {
+  mode = nextMode;
+  localStorage.setItem(MODE_KEY, nextMode);
 }
 
 async function deriveKey(masterPassword, saltBytes) {
@@ -188,7 +197,7 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 function escapeHtml(str = "") {
-  return str
+  return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -234,11 +243,118 @@ async function copyText(text) {
   }
 }
 
+// ---------- 2FA（TOTP） ----------
+function normalizeBase32Secret(raw) {
+  return String(raw || "").replace(/[\s-]/g, "").toUpperCase();
+}
+
+function base32ToBytes(secret) {
+  const s = normalizeBase32Secret(secret);
+  if (!s) return new Uint8Array();
+
+  const rev = {};
+  for (let i = 0; i < BASE32_ALPHABET.length; i++) {
+    rev[BASE32_ALPHABET[i]] = i;
+  }
+
+  let bits = 0;
+  let buffer = 0;
+  const out = [];
+
+  for (const ch of s) {
+    const v = rev[ch];
+    if (v === undefined) throw new Error(`无效Base32字符：${ch}`);
+    buffer = (buffer << 5) | v;
+    bits += 5;
+    while (bits >= 8) {
+      out.push((buffer >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+  return new Uint8Array(out);
+}
+
+async function generateTotp(secretBase32, timestamp = Date.now(), step = TOTP_STEP, digits = TOTP_DIGITS) {
+  const secret = base32ToBytes(secretBase32);
+  if (!secret.length) throw new Error("缺少2FA密钥");
+  const counter = Math.floor(timestamp / 1000 / step);
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    secret,
+    { name: "HMAC", hash: "SHA-1" },
+    false,
+    ["sign"]
+  );
+
+  const msg = new Uint8Array(8);
+  let c = counter;
+  for (let i = 7; i >= 0; i--) {
+    msg[i] = c & 0xff;
+    c = Math.floor(c / 256);
+  }
+
+  const hmac = new Uint8Array(await crypto.subtle.sign("HMAC", key, msg));
+  const offset = hmac[hmac.length - 1] & 0x0f;
+  const binary =
+    ((hmac[offset] & 0x7f) << 24) |
+    (hmac[offset + 1] << 16) |
+    (hmac[offset + 2] << 8) |
+    (hmac[offset + 3]);
+  const code = ((binary >>> 0) % Math.pow(10, digits)).toString().padStart(digits, "0");
+
+  return code;
+}
+
+async function updateTotpDisplays() {
+  if (!isIndexPage() || !listContainer) return;
+
+  const now = Date.now();
+  const nowSec = Math.floor(now / 1000);
+  const remain = TOTP_STEP - (nowSec % TOTP_STEP);
+  const stepNow = Math.floor(nowSec / TOTP_STEP);
+
+  const codeNodes = [...listContainer.querySelectorAll("[data-totp-id]")];
+  if (!codeNodes.length) return;
+
+  // 只在30秒边界重算一次，避免无谓计算
+  if (stepNow !== lastTotpStep) {
+    lastTotpStep = stepNow;
+    for (const node of codeNodes) {
+      const id = node.dataset.totpId;
+      const item = items.find((x) => x.id === id);
+      if (!item || !item.totpSecret) continue;
+
+      try {
+        const code = await generateTotp(item.totpSecret, now, TOTP_STEP, TOTP_DIGITS);
+        node.textContent = code;
+      } catch {
+        node.textContent = "ERR";
+      }
+    }
+  }
+
+  for (const node of codeNodes) {
+    const id = node.dataset.totpId;
+    const remainNode = document.getElementById(`totpRemain-${id}`);
+    if (remainNode) remainNode.textContent = `(${remain}s)`;
+  }
+}
+
+function startTotpTicker() {
+  if (!isIndexPage() || !listContainer) return;
+  if (totpTimer) clearInterval(totpTimer);
+  lastTotpStep = -1;
+  updateTotpDisplays();
+  totpTimer = setInterval(updateTotpDisplays, 1000);
+}
+
 // ---------- index：表单 / 列表 ----------
 function resetForm() {
   if (!form) return;
   form.reset();
   if (editIdInput) editIdInput.value = "";
+  if (totpSecretInput) totpSecretInput.value = "";
   if (formTitle) formTitle.textContent = "添加密码";
   if (cancelEditBtn) cancelEditBtn.classList.add("hidden");
 }
@@ -253,6 +369,7 @@ function startEdit(id) {
   accountInput.value = item.account;
   passwordInput.value = item.password;
   noteInput.value = item.note || "";
+  if (totpSecretInput) totpSecretInput.value = item.totpSecret || "";
 
   if (formTitle) formTitle.textContent = "编辑密码";
   if (cancelEditBtn) cancelEditBtn.classList.remove("hidden");
@@ -274,7 +391,8 @@ function render() {
     (x) =>
       x.name.toLowerCase().includes(keyword) ||
       x.account.toLowerCase().includes(keyword) ||
-      (x.note || "").toLowerCase().includes(keyword)
+      (x.note || "").toLowerCase().includes(keyword) ||
+      (x.totpSecret || "").toLowerCase().includes(keyword)
   );
 
   if (!filtered.length) {
@@ -285,6 +403,7 @@ function render() {
   listContainer.innerHTML = filtered
     .map((item) => {
       const maskedPwd = "•".repeat(Math.max(item.password.length, 8));
+      const hasTotp = !!item.totpSecret;
       return `
       <div class="item">
         <div class="item-head">
@@ -293,10 +412,19 @@ function render() {
         </div>
         <div class="meta"><strong>账号：</strong>${escapeHtml(item.account)}</div>
         <div class="meta"><strong>密码：</strong>${escapeHtml(maskedPwd)}</div>
+        ${hasTotp
+          ? `<div class="meta">
+               <strong>2FA验证码：</strong>
+               <span id="totpCode-${item.id}" data-totp-id="${item.id}" class="totp-code">------</span>
+               <span id="totpRemain-${item.id}" class="totp-remain">(30s)</span>
+             </div>`
+          : ""
+        }
         <div class="meta"><strong>备注：</strong>${escapeHtml(item.note || "-")}</div>
         <div class="actions">
           <button onclick="copyField('${item.id}','account')">复制账号</button>
           <button onclick="copyField('${item.id}','password')">复制密码</button>
+          ${hasTotp ? `<button class="secondary" onclick="copyTotp('${item.id}')">复制2FA</button>` : ""}
           <button class="secondary" onclick="startEdit('${item.id}')">修改</button>
           <button class="danger" onclick="removeItem('${item.id}')">删除</button>
         </div>
@@ -304,6 +432,9 @@ function render() {
     `;
     })
     .join("");
+
+  // 列表重绘后立即刷新一次显示
+  void updateTotpDisplays();
 }
 
 window.copyField = function (id, field) {
@@ -311,8 +442,24 @@ window.copyField = function (id, field) {
   if (!item) return;
   copyText(item[field] || "");
 };
+
 window.startEdit = startEdit;
 window.removeItem = removeItem;
+
+window.copyTotp = async function (id) {
+  const item = items.find((x) => x.id === id);
+  if (!item || !item.totpSecret) {
+    alert("该条记录未设置2FA密钥");
+    return;
+  }
+  try {
+    const code = await generateTotp(item.totpSecret, Date.now(), TOTP_STEP, TOTP_DIGITS);
+    copyText(code);
+  } catch (e) {
+    console.error(e);
+    alert("2FA生成失败，请检查密钥是否正确");
+  }
+};
 
 // ---------- UI 刷新 ----------
 function refreshSecurityUI() {
@@ -341,6 +488,7 @@ function enterApp() {
 
   refreshSecurityUI();
   render();
+  startTotpTicker();
 }
 
 // index: 初始化解锁卡
@@ -400,7 +548,7 @@ if (authBtn) {
         await unlockVault(master);
       }
 
-      enterApp(); // 成功后直接进入，不弹成功框
+      enterApp();
     } catch (err) {
       console.error(err);
       alert("解锁失败：主密码错误或数据损坏");
@@ -412,27 +560,41 @@ if (authBtn) {
 if (form) {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-
     const id = editIdInput?.value.trim() || "";
     const payload = {
       name: nameInput?.value.trim() || "",
       account: accountInput?.value.trim() || "",
       password: passwordInput?.value.trim() || "",
       note: noteInput?.value.trim() || "",
+      totpSecret: normalizeBase32Secret(totpSecretInput?.value || ""),
     };
-
-    if (!payload.name || !payload.account || !payload.password) {
-      alert("请填写必填项：名称、账号、密码");
+    const hasAccountPassword = payload.account && payload.password; // 账号+密码这一组
+    const hasTotp = !!payload.totpSecret;                         // 2FA这一组
+    if (!payload.name) {
+      alert("请填写必填项：名称");
       return;
     }
-
+    // 新判定：账号+密码 二选一 或 2FA
+    if (!hasAccountPassword && !hasTotp) {
+      alert("请至少填写“账号+密码”或“2FA密钥”（可二选一，也可都填）");
+      return;
+    }
+    // 若使用账号密码，账号和密码必须成对出现
+    if ((payload.account && !payload.password) || (payload.password && !payload.account)) {
+      alert("若选择“账号密码”方式，请同时填写账号和密码");
+      return;
+    }
     if (id) {
       const idx = items.findIndex((x) => x.id === id);
       if (idx !== -1) items[idx] = { ...items[idx], ...payload, updatedAt: Date.now() };
     } else {
-      items.unshift({ id: uid(), ...payload, createdAt: Date.now(), updatedAt: Date.now() });
+      items.unshift({
+        id: uid(),
+        ...payload,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
     }
-
     await persistVault();
     resetForm();
     render();
@@ -456,7 +618,7 @@ if (toggleMasterBtn) {
         const ok = confirm("关闭主密码后，将改为本地明文存储。确定继续吗？");
         if (!ok) return;
 
-        // 当前内存没有解锁数据时，尝试提示输入一次主密码解锁后再转换
+        // 当前未解锁时，先用主密码解锁再转换
         if (!items.length && hasVault() && !cryptoKey) {
           const pwd = prompt("请输入当前主密码以完成关闭操作");
           if (!pwd) return;
@@ -546,7 +708,11 @@ if (changeMasterBtn) {
 
   if (isSecurityPage()) {
     // security 页面只展示状态，不需要自动解锁
-    // 但要显示当前模式与按钮文案
     initSecurityPage();
   }
 })();
+
+// 页面离开时清理计时器（可选）
+window.addEventListener("beforeunload", () => {
+  if (totpTimer) clearInterval(totpTimer);
+});

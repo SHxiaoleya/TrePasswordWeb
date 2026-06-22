@@ -1,4 +1,4 @@
-# 🔐 Tre Password Web
+# 🔐 The Password Web
 
 一个轻量、可本地运行的密码管理器网站项目。  
 支持主密码解锁与本地加密存储，并提供 APK 发行版本（通过 PakePlus 打包）。
@@ -6,8 +6,6 @@
 > 本仓库仅包含前端源码。  
 > Android APK 请在 **GitHub Releases** 页面下载。
 
----
-### 演示站：[点击前往](https://tre-password.rth1.xyz/)
 ---
 
 ## ✨ 项目功能
@@ -17,8 +15,9 @@
 - 修改、删除已有条目
 - 一键复制账号/密码
 - 关键词搜索（名称/账号/备注）
-- 主密码解锁（可选）
+- 主密码解锁
 - 本地 AES-GCM 加密存储（`localStorage` 中为密文）
+- 支持 2FA 动态密码添加
 
 ---
 

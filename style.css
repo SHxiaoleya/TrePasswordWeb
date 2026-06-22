@@ -182,3 +182,14 @@ button.danger:hover {
   cursor: pointer;
   box-sizing: border-box;
 }
+
+.totp-code{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+.totp-remain{
+  margin-left: 6px;
+  color: #666;
+  font-size: 12px;
+}
