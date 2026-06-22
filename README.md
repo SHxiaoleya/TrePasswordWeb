@@ -4,7 +4,7 @@
 支持主密码解锁与本地加密存储，并提供 APK 发行版本（通过 PakePlus 打包）。
 
 > 本仓库仅包含前端源码。  
-> Android APK 请在 **GitHub Releases** 页面下载。
+> --Android APK 请在 **GitHub Releases** 页面下载。--
 
 ---
 
@@ -61,9 +61,10 @@
 
 ## 📦 APK 发行说明
 
-本项目 Android 安装包由开源工具**PakePlus**打包生成。
-源码仍以本仓库前端代码为准，APK 仅在 Releases 发布。
-- 下载地址：https://github.com/SHxiaoleya/ThePasswordWeb/releases
+--本项目 Android 安装包由开源工具**PakePlus**打包生成。--
+--源码仍以本仓库前端代码为准，APK 仅在 Releases 发布。--
+- --下载地址：https://github.com/SHxiaoleya/ThePasswordWeb/releases--
+由于发布时多次编译失败，本项目不再提供 APK 安装包，你可以自行下载打包。
 
 ---
 
