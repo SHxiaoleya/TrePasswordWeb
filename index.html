@@ -3,97 +3,173 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
   <title>密码管理器</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="container">
-    <h1>🔐 密码管理器</h1>
+  <!-- 顶栏 -->
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="./index.html">
+        <span aria-hidden="true">🔐</span>
+        <span>密码管理器</span>
+      </a>
+      <nav class="nav-actions">
+        <span class="badge badge-ok hidden" id="vaultStatus">已解锁</span>
+        <button type="button" id="lockBtn" class="secondary btn-link hidden">锁定</button>
+        <a href="./security.html" class="secondary btn-link">安全设置</a>
+      </nav>
+    </div>
+  </header>
 
-    <!-- 解锁卡片 -->
-    <section class="card" id="authCard">
-      <h2 id="authTitle">解锁密码库</h2>
-      <p class="tip" id="authTip">请输入主密码解锁。</p>
+  <main class="container">
+    <!-- 解锁 / 首次设置 -->
+    <section class="auth-wrap" id="authCard">
+      <div class="card auth-card">
+        <div class="auth-head">
+          <span class="auth-badge" aria-hidden="true">🔐</span>
+          <h1 id="authTitle">解锁密码库</h1>
+          <p class="tip" id="authTip">请输入主密码解锁。</p>
+        </div>
 
-      <div class="form-row">
-        <label for="masterPassword">主密码</label>
-        <input id="masterPassword" type="password" placeholder="请输入主密码" />
-      </div>
+        <form id="authForm" novalidate>
+          <div class="form-row">
+            <label class="field-label" for="masterPassword">主密码</label>
+            <div class="input-group">
+              <input id="masterPassword" type="password" autocomplete="current-password"
+                     placeholder="请输入主密码" />
+              <button type="button" class="icon-btn" data-toggle-password="masterPassword"
+                      aria-label="显示密码" title="显示密码">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </div>
+            <p class="hint hidden" id="masterHint">主密码不会保存，请务必牢记。</p>
+          </div>
 
-      <div class="form-row hidden" id="confirmRow">
-        <label for="masterPasswordConfirm">确认主密码</label>
-        <input id="masterPasswordConfirm" type="password" placeholder="请再次输入主密码" />
-      </div>
+          <div class="form-row hidden" id="confirmRow">
+            <label class="field-label" for="masterPasswordConfirm">确认主密码</label>
+            <div class="input-group">
+              <input id="masterPasswordConfirm" type="password" autocomplete="new-password"
+                     placeholder="请再次输入主密码" />
+              <button type="button" class="icon-btn" data-toggle-password="masterPasswordConfirm"
+                      aria-label="显示密码" title="显示密码">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </div>
+          </div>
 
-      <div class="form-actions">
-        <button id="authBtn">解锁</button>
+          <p class="modal-error hidden" id="authError"></p>
+
+          <label class="check-row" for="rememberSession">
+            <input type="checkbox" id="rememberSession" />
+            <span>在当前标签页保持解锁（关闭页面即失效）</span>
+          </label>
+
+          <div class="form-actions">
+            <button type="submit" id="authBtn">解锁</button>
+          </div>
+        </form>
       </div>
     </section>
 
     <!-- 主应用 -->
     <div id="appArea" class="hidden">
-      <!-- 顶栏 -->
-      <section class="card topbar">
-        <div>
-          <strong>状态：</strong><span id="vaultStatus">已解锁</span>
+      <div class="toolbar">
+        <div class="search-field">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.6-3.6" />
+          </svg>
+          <input id="searchInput" type="search" placeholder="搜索名称 / 账号 / 备注 / 2FA…"
+                 aria-label="搜索密码条目" autocomplete="off" />
+          <button type="button" id="searchClearBtn" class="search-clear hidden"
+                  aria-label="清空搜索" title="清空搜索">×</button>
         </div>
-          <a href="./security.html" class="secondary btn-link">安全设置</a>
-      </section>
+        <span class="toolbar-count" id="listCount"></span>
+      </div>
 
-      <!-- 表单区域 -->
-      <section class="card">
-        <h2 id="formTitle">添加密码</h2>
-        <form id="passwordForm">
-          <input type="hidden" id="editId" />
-
-          <div class="form-row">
-            <label for="name">名称 *</label>
-            <input id="name" type="text" placeholder="例如：GitHub / 微信" required />
-          </div>
-
-          <div class="form-row">
-            <label for="account">账号</label>
-            <input id="account" type="text" placeholder="邮箱 / 用户名 / 手机号" />
-          </div>
-
-          <div class="form-row">
-            <label for="password">密码</label>
-            <div class="password-input-wrap">
-              <input id="password" type="text" placeholder="请输入密码" />
-              <button type="button" id="genPasswordBtn" class="secondary">随机强密码</button>
+      <div class="app-layout">
+        <!-- 侧栏：添加 / 编辑 -->
+        <aside class="app-aside">
+          <section class="card">
+            <div class="card-head">
+              <h2 id="formTitle">添加密码</h2>
+              <button type="button" id="cancelEditBtn" class="secondary btn-sm hidden">取消编辑</button>
             </div>
+
+            <form id="passwordForm" novalidate>
+              <input type="hidden" id="editId" />
+
+              <div class="form-row">
+                <label class="field-label" for="name">名称 <span class="req">*</span></label>
+                <input id="name" type="text" placeholder="例如：GitHub / 微信" required
+                       autocomplete="off" />
+              </div>
+
+              <div class="form-row">
+                <label class="field-label" for="account">账号</label>
+                <input id="account" type="text" placeholder="邮箱 / 用户名 / 手机号"
+                       autocomplete="off" />
+              </div>
+
+              <div class="form-row">
+                <label class="field-label" for="password">密码</label>
+                <div class="input-group">
+                  <input id="password" type="text" placeholder="请输入密码" autocomplete="off" />
+                  <button type="button" class="icon-btn" data-toggle-password="password"
+                          aria-label="显示密码" title="显示密码">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                  <button type="button" id="genPasswordBtn" class="secondary">随机密码</button>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <label class="field-label" for="totpSecret">2FA 密钥（Base32）</label>
+                <input id="totpSecret" type="text" placeholder="例如：JBSWY3DPEHPK3PXP"
+                       autocomplete="off" spellcheck="false" />
+                <p class="hint">填入后列表中会实时显示 6 位动态验证码。</p>
+              </div>
+
+              <div class="form-row">
+                <label class="field-label" for="note">备注</label>
+                <textarea id="note" rows="2" placeholder="可选备注"></textarea>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" id="saveBtn">保存</button>
+                <button type="reset" id="resetFormBtn" class="secondary">清空</button>
+              </div>
+            </form>
+
+            <div class="aside-foot">
+              <label class="field-label" for="autoLockSelect">安全</label>
+              <select id="autoLockSelect" aria-label="自动锁定时间"></select>
+            </div>
+          </section>
+        </aside>
+
+        <!-- 列表 -->
+        <section class="card">
+          <div class="card-head">
+            <h2>密码列表</h2>
+            <span class="tip" id="listHint">按 Ctrl / ⌘ + K 快速搜索</span>
           </div>
-
-          <div class="form-row">
-            <label for="note">备注</label>
-            <textarea id="note" rows="2" placeholder="可选备注"></textarea>
-          </div>
-
-          <div class="form-row">
-            <label for="totpSecret">2FA 密钥（Base32）</label>
-            <input id="totpSecret" type="text" placeholder="例如：JBSWY3DPEHPK3PXP" />
-          </div>
-
-          <div class="form-actions">
-            <button type="submit" id="saveBtn">保存</button>
-            <button type="button" id="cancelEditBtn" class="secondary hidden">取消编辑</button>
-          </div>
-        </form>
-      </section>
-
-      <!-- 搜索 -->
-      <section class="card">
-        <h2>搜索</h2>
-        <input id="searchInput" type="text" placeholder="输入名称/账号/备注进行搜索..." />
-      </section>
-
-      <!-- 列表 -->
-      <section class="card">
-        <h2>密码列表</h2>
-        <div id="listContainer" class="list"></div>
-      </section>
+          <div id="listContainer" class="list"></div>
+        </section>
+      </div>
     </div>
-  </div>
+  </main>
 
   <script src="script.js"></script>
 </body>

@@ -3,47 +3,109 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
   <title>安全设置 - 密码管理器</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="container">
-    <h1>🛡️ 安全设置</h1>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="./index.html">
+        <span aria-hidden="true">🛡️</span>
+        <span>安全设置</span>
+      </a>
+      <nav class="nav-actions">
+        <span class="badge badge-ok" id="vaultStatus">检测中…</span>
+        <a href="./index.html" class="secondary btn-link">返回密码库</a>
+      </nav>
+    </div>
+  </header>
 
+  <main class="container stack">
     <section class="card">
-      <div class="form-actions" style="justify-content:space-between;">
-        <a href="./index.html" class="secondary btn-link">返回主页</a>
-        <span><strong>状态：</strong><span id="vaultStatus">检测中...</span></span>
+      <div class="card-head">
+        <h2>存储方式</h2>
       </div>
+      <p class="tip">
+        开启主密码后，密码库使用 Web Crypto（PBKDF2 + AES-GCM）加密后保存在本机浏览器中；
+        关闭后则改为明文保存，任何能打开此页面的人都能看到内容。
+      </p>
     </section>
 
     <section class="card">
-      <h2>主密码开关</h2>
-      <div class="form-actions">
-        <button id="toggleMasterBtn" class="secondary">关闭主密码</button>
+      <div class="card-head">
+        <h2>主密码开关</h2>
+        <button type="button" id="toggleMasterBtn" class="danger-soft">关闭主密码</button>
       </div>
-      <p class="tip">关闭后将改为本地明文存储；开启后将加密存储。</p>
+      <p class="tip">关闭主密码将改为明文存储；再次开启时需要重新设置主密码并完成加密。</p>
     </section>
 
     <section class="card" id="changeMasterSection">
-      <h2>修改主密码</h2>
-      <div class="form-row">
-        <label for="oldMasterPassword">旧主密码</label>
-        <input id="oldMasterPassword" type="password" placeholder="请输入旧主密码" />
+      <div class="card-head">
+        <h2>修改主密码</h2>
       </div>
-      <div class="form-row">
-        <label for="newMasterPassword">新主密码</label>
-        <input id="newMasterPassword" type="password" placeholder="至少 8 位" />
-      </div>
-      <div class="form-row">
-        <label for="newMasterPasswordConfirm">确认新主密码</label>
-        <input id="newMasterPasswordConfirm" type="password" placeholder="请再次输入新主密码" />
-      </div>
-      <div class="form-actions">
-        <button id="changeMasterBtn">修改主密码</button>
-      </div>
+      <form id="changeMasterForm" novalidate>
+        <div class="form-row">
+          <label class="field-label" for="oldMasterPassword">旧主密码</label>
+          <div class="input-group">
+            <input id="oldMasterPassword" type="password" placeholder="请输入旧主密码"
+                   autocomplete="current-password" />
+            <button type="button" class="icon-btn" data-toggle-password="oldMasterPassword"
+                    aria-label="显示密码" title="显示密码">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="field-label" for="newMasterPassword">新主密码</label>
+          <div class="input-group">
+            <input id="newMasterPassword" type="password" placeholder="至少 8 位"
+                   autocomplete="new-password" />
+            <button type="button" class="icon-btn" data-toggle-password="newMasterPassword"
+                    aria-label="显示密码" title="显示密码">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="field-label" for="newMasterPasswordConfirm">确认新主密码</label>
+          <div class="input-group">
+            <input id="newMasterPasswordConfirm" type="password" placeholder="请再次输入新主密码"
+                   autocomplete="new-password" />
+            <button type="button" class="icon-btn" data-toggle-password="newMasterPasswordConfirm"
+                    aria-label="显示密码" title="显示密码">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <p class="hint">修改后请使用新主密码解锁；旧主密码立即失效。</p>
+
+        <div class="form-actions">
+          <button type="submit" id="changeMasterBtn">修改主密码</button>
+        </div>
+      </form>
     </section>
-  </div>
+
+    <section class="card danger-card">
+      <div class="card-head">
+        <h2>危险操作</h2>
+        <button type="button" id="clearAllBtn" class="danger">清空本机数据</button>
+      </div>
+      <p class="tip">删除本机保存的密码库（含加密数据与明文数据），操作不可撤销。</p>
+    </section>
+  </main>
 
   <script src="script.js"></script>
 </body>
